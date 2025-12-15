@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
+import io
 
 # ------------------------------
 # Load Data
@@ -66,59 +68,96 @@ if st.button("Generate Chart"):
 # ------------------------------
 # Combined Q2 Chart (Correct Grouped Version)
 # ------------------------------
-st.write("---")
-st.write("### 📌 Combined Q2 Chart (Grouped by % Effort) — SE RISCC Only")
+def plot_combined_q2(df):
+    # Identify all Q2 columns
+    q2_cols = [col for col in df.columns if col.strip().startswith("2.")]
+    if not q2_cols:
+        st.error("No Q2 columns found in this dataset.")
+        return
 
-if survey_choice == "SE RISCC Priorities":
-    
-    if st.button("Show Combined Q2 Chart"):
+    taxa_groups = {
+        "Terrestrial Plants": q2_cols[0],
+        "Terrestrial Invertebrates": q2_cols[1],
+        "Terrestrial Vertebrates": q2_cols[2],
+        "Freshwater Plants": q2_cols[3],
+        "Freshwater Invertebrates": q2_cols[4],
+        "Freshwater Vertebrates": q2_cols[5],
+        "Marine Plants": q2_cols[6],
+        "Marine Invertebrates": q2_cols[7],
+        "Marine Vertebrates": q2_cols[8]
+    }
 
-        # Identify Q2 columns
-        q2_cols = [
-            c for c in riscc_df.columns 
-            if "Identify the percentage of your effort" in c
-        ]
+    # Effort ranges (0–20, 20–40, 40–60, 60–80, 80–100)
+    bins = [0, 20, 40, 60, 80, 100]
+    labels = ["0–20%", "20–40%", "40–60%", "60–80%", "80–100%"]
 
-        if not q2_cols:
-            st.error("No Q2 columns found.")
-        else:
-            st.success("Q2 columns detected and grouped!")
+    # Create grouped counts
+    grouped_df = pd.DataFrame(index=taxa_groups.keys(), columns=labels)
 
-            # Extract data
-            q2_data = riscc_df[q2_cols].apply(pd.to_numeric, errors='coerce')
+    for group, col in taxa_groups.items():
+        values = df[col].dropna().astype(float)
+        grouped_df.loc[group] = pd.cut(values, bins=bins, labels=labels, include_lowest=True).value_counts().reindex(labels, fill_value=0)
 
-            # Define bins
-            bins = [0, 20, 40, 60, 80, 100]
-            labels = ["0–20%", "20–40%", "40–60%", "60–80%", "80–100%"]
-            
-            grouped_counts = {col: pd.cut(q2_data[col], bins=bins, labels=labels).value_counts()
-                              for col in q2_cols}
+    # Plot
+    fig, ax = plt.subplots(figsize=(14, 7))
 
-            grouped_df = pd.DataFrame(grouped_counts).fillna(0).astype(int)
+    bottom = np.zeros(len(grouped_df))
 
-            st.write("### **Grouped Q2 % Effort Distribution**")
-            st.dataframe(grouped_df)
+    colors = {
+        "0–20%": "#1f77b4",
+        "20–40%": "#2ca02c",
+        "40–60%": "#d62728",
+        "60–80%": "#c7c7c7",
+        "80–100%": "#17becf"
+    }
 
-            # Create stacked bar plot
-            fig, ax = plt.subplots(figsize=(14, 7))
+    # Stacked bars
+    for label in labels:
+        values = grouped_df[label].values
+        ax.bar(
+            grouped_df.index,
+            values,
+            bottom=bottom,
+            label=label,
+            color=colors[label]
+        )
 
-            grouped_df.T.plot(kind='bar', stacked=True, ax=ax,
-                              color=["#1f77b4", "#2ca02c", "#d62728", "#9467bd", "#8c564b"])
+        # Add % text
+        for i, v in enumerate(values):
+            if v > 0:
+                pct = f"{(v / grouped_df.sum(axis=1).iloc[i]) * 100:.1f}%"
+                ax.text(
+                    i,
+                    bottom[i] + v / 2,
+                    pct,
+                    ha="center",
+                    va="center",
+                    fontsize=9,
+                    color="white",
+                    fontweight="bold"
+                )
 
-            plt.title("SE RISCC Priorities - Combined Q2 (Grouped by % Effort)")
-            plt.xlabel("Taxa Group")
-            plt.ylabel("Number of Responses")
-            plt.xticks(rotation=45, ha='right')
+        bottom += values
 
-            # Add labels on bars
-            for i, col in enumerate(grouped_df.columns):
-                for j, val in enumerate(grouped_df[col]):
-                    if val > 0:
-                        ax.text(j, grouped_df[col].iloc[:j].sum() + val/2,
-                                f"{val}", ha="center", va="center", color="white", fontsize=8)
+    ax.set_title("SE RISCC Priorities - Combined Q2 (Grouped by % Effort)", fontsize=14)
+    ax.set_ylabel("Number of Responses", fontsize=12)
+    ax.set_xlabel("Taxa Group", fontsize=12)
+    plt.xticks(rotation=60, ha="right")
+    ax.legend(title="Effort Range (%)", bbox_to_anchor=(1.15, 1), loc="upper left")
 
-            st.pyplot(fig)
+    st.pyplot(fig)
 
-else:
-    st.info("Combined Q2 Chart is only available for the SE RISCC dataset.")
+    # ----------------------------
+    # DOWNLOAD BUTTON FOR PNG
+    # ----------------------------
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+    buf.seek(0)
+
+    st.download_button(
+        label="📥 Download Combined Q2 Chart (PNG)",
+        data=buf,
+        file_name="combined_q2_chart.png",
+        mime="image/png"
+    )
 
