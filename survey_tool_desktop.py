@@ -40,13 +40,11 @@ def remove_pii(df):
 # COMBINED Q2 PLOT FUNCTION (CORRECT VERSION)
 # -----------------------------------------------------------
 def plot_combined_q2(df):
-    # Identify Q2 columns
     q2_cols = [col for col in df.columns if col.startswith("2.")]
     if not q2_cols:
         st.error("No Q2 columns found.")
         return
 
-    # Taxa groups in correct order
     taxa_groups = {
         "Terrestrial Plants": q2_cols[0],
         "Terrestrial Invertebrates": q2_cols[1],
@@ -72,7 +70,6 @@ def plot_combined_q2(df):
             .reindex(labels, fill_value=0)
         )
 
-    # Plotting
     fig, ax = plt.subplots(figsize=(14, 7))
     bottom = np.zeros(len(grouped_df))
 
@@ -88,20 +85,11 @@ def plot_combined_q2(df):
         values = grouped_df[label].astype(int).values
         ax.bar(grouped_df.index, values, bottom=bottom, label=label, color=colors[label])
 
-        # Add % text
         for i, v in enumerate(values):
             if v > 0:
                 pct = (v / grouped_df.sum(axis=1).iloc[i]) * 100
-                ax.text(
-                    i,
-                    bottom[i] + v / 2,
-                    f"{pct:.1f}%",
-                    ha="center",
-                    va="center",
-                    fontsize=9,
-                    color="white",
-                    fontweight="bold",
-                )
+                ax.text(i, bottom[i] + v / 2, f"{pct:.1f}%", 
+                        ha="center", va="center", fontsize=9, color="white", fontweight="bold")
 
         bottom += values
 
@@ -113,7 +101,6 @@ def plot_combined_q2(df):
 
     st.pyplot(fig)
 
-    # Download button
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
     buf.seek(0)
@@ -137,34 +124,28 @@ dataset_choice = st.selectbox(
 )
 
 df = ext_df if dataset_choice == "Extension Priorities" else riscc_df
-
-# REMOVE PII IMMEDIATELY
 df = remove_pii(df)
 
 st.subheader(f"Dataset: {dataset_choice}")
 st.write(f"Rows: {len(df)}, Columns: {df.shape[1]}")
 
-
-# -----------------------------------------------------------
-# Filtering
-# -----------------------------------------------------------
+# -----------------------------
+# FILTER UI ONLY — NO TABLE
+# -----------------------------
 column_choice = st.selectbox("Select a question/column to filter:", df.columns)
 
 unique_values = df[column_choice].dropna().unique()
 filter_choice = st.multiselect("Filter by:", unique_values)
 
+# Apply filter (but DO NOT display table anymore)
 if filter_choice:
     filtered_df = df[df[column_choice].isin(filter_choice)]
 else:
     filtered_df = df
 
-st.write("### Filtered Data Preview")
-st.dataframe(filtered_df.head())
-
-
-# -----------------------------------------------------------
-# Combined Q2 Button
-# -----------------------------------------------------------
+# -----------------------------
+# COMBINED Q2 BUTTON
+# -----------------------------
 if dataset_choice == "RISCC Priorities":
     if st.button("Show Combined Q2 Chart (RISCC)"):
         plot_combined_q2(riscc_df)
