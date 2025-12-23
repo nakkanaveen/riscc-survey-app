@@ -1,152 +1,153 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import numpy as np
-import io
 
-st.set_page_config(page_title="SE RISCC Survey Dashboard", layout="wide")
-
-# -----------------------------------------------------------
-# LOAD DATA
-# -----------------------------------------------------------
+# --------------------------------------------------
+# Load Data
+# --------------------------------------------------
 @st.cache_data
 def load_data():
-    df_ext = pd.read_csv("Extension_Priorities_Cleaned.csv")
-    df_riscc = pd.read_csv("SE_RISCC_Priorities_Cleaned.csv")
-    return df_ext, df_riscc
+    ext = pd.read_csv("Extension_Priorities_Cleaned.csv")
+    riscc = pd.read_csv("SE_RISCC_Priorities_Cleaned.csv")
+    return ext, riscc
 
 ext_df, riscc_df = load_data()
 
-
-# -----------------------------------------------------------
-# REMOVE PERSONAL IDENTIFIABLE INFORMATION (PII)
-# -----------------------------------------------------------
-PII_COLUMNS = [
-    "IP Address",
-    "Email",
-    "Name",
-    "First Name",
-    "Last Name",
-    "Username",
-    "Before we get started, please include your email if you would like to be added to the SE RISCC list serve (Optional)"
-]
-
-def remove_pii(df):
-    cols_to_drop = [c for c in PII_COLUMNS if c in df.columns]
-    return df.drop(columns=cols_to_drop, errors="ignore")
-
-
-# -----------------------------------------------------------
-# COMBINED Q2 PLOT FUNCTION (CORRECT VERSION)
-# -----------------------------------------------------------
-def plot_combined_q2(df):
-    q2_cols = [col for col in df.columns if col.startswith("2.")]
-    if not q2_cols:
-        st.error("No Q2 columns found.")
-        return
-
-    taxa_groups = {
-        "Terrestrial Plants": q2_cols[0],
-        "Terrestrial Invertebrates": q2_cols[1],
-        "Terrestrial Vertebrates": q2_cols[2],
-        "Freshwater Plants": q2_cols[3],
-        "Freshwater Invertebrates": q2_cols[4],
-        "Freshwater Vertebrates": q2_cols[5],
-        "Marine Plants": q2_cols[6],
-        "Marine Invertebrates": q2_cols[7],
-        "Marine Vertebrates": q2_cols[8],
-    }
-
-    bins = [0, 20, 40, 60, 80, 100]
-    labels = ["0–20%", "20–40%", "40–60%", "60–80%", "80–100%"]
-
-    grouped_df = pd.DataFrame(index=taxa_groups.keys(), columns=labels)
-
-    for group, col in taxa_groups.items():
-        values = df[col].dropna().astype(float)
-        grouped_df.loc[group] = (
-            pd.cut(values, bins=bins, labels=labels, include_lowest=True)
-            .value_counts()
-            .reindex(labels, fill_value=0)
-        )
-
-    fig, ax = plt.subplots(figsize=(14, 7))
-    bottom = np.zeros(len(grouped_df))
-
-    colors = {
-        "0–20%": "#1f77b4",
-        "20–40%": "#2ca02c",
-        "40–60%": "#d62728",
-        "60–80%": "#c7c7c7",
-        "80–100%": "#17becf",
-    }
-
-    for label in labels:
-        values = grouped_df[label].astype(int).values
-        ax.bar(grouped_df.index, values, bottom=bottom, label=label, color=colors[label])
-
-        for i, v in enumerate(values):
-            if v > 0:
-                pct = (v / grouped_df.sum(axis=1).iloc[i]) * 100
-                ax.text(i, bottom[i] + v / 2, f"{pct:.1f}%", 
-                        ha="center", va="center", fontsize=9, color="white", fontweight="bold")
-
-        bottom += values
-
-    ax.set_title("SE RISCC Priorities - Combined Q2 (Grouped by % Effort)", fontsize=15)
-    ax.set_ylabel("Number of Responses")
-    ax.set_xlabel("Taxa Group")
-    plt.xticks(rotation=45, ha="right")
-    ax.legend(title="Effort Range (%)", bbox_to_anchor=(1.15, 1), loc="upper left")
-
-    st.pyplot(fig)
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
-    buf.seek(0)
-
-    st.download_button(
-        label="📥 Download Combined Q2 Chart (PNG)",
-        data=buf,
-        file_name="combined_q2_chart.png",
-        mime="image/png",
-    )
-
-
-# -----------------------------------------------------------
-# STREAMLIT UI
-# -----------------------------------------------------------
 st.title("📊 SE RISCC Survey Dashboard")
 
-dataset_choice = st.selectbox(
+# --------------------------------------------------
+# Dataset Selection
+# --------------------------------------------------
+dataset_name = st.selectbox(
     "Choose the survey dataset:",
-    ["Extension Priorities", "RISCC Priorities"]
+    ["Extension Priorities", "SE RISCC Priorities"]
 )
 
-df = ext_df if dataset_choice == "Extension Priorities" else riscc_df
-df = remove_pii(df)
+df = ext_df if dataset_name == "Extension Priorities" else riscc_df
 
-st.subheader(f"Dataset: {dataset_choice}")
-st.write(f"Rows: {len(df)}, Columns: {df.shape[1]}")
+st.markdown(f"**Rows:** {df.shape[0]} &nbsp;&nbsp; **Columns:** {df.shape[1]}")
 
-# -----------------------------
-# FILTER UI ONLY — NO TABLE
-# -----------------------------
-column_choice = st.selectbox("Select a question/column to filter:", df.columns)
+# --------------------------------------------------
+# Question Selection (THIS controls the chart)
+# --------------------------------------------------
+question = st.selectbox(
+    "Select a survey question to visualize:",
+    df.columns
+)
 
-unique_values = df[column_choice].dropna().unique()
-filter_choice = st.multiselect("Filter by:", unique_values)
+# --------------------------------------------------
+# Optional Filter (ONLY one, simple & clear)
+# --------------------------------------------------
+with st.expander("Optional filter (optional)"):
+    filter_col = st.selectbox("Filter column:", ["None"] + list(df.columns))
+    
+    if filter_col != "None":
+        filter_vals = st.multiselect(
+            "Select values:",
+            sorted(df[filter_col].dropna().astype(str).unique())
+        )
+    else:
+        filter_vals = []
 
-# Apply filter (but DO NOT display table anymore)
-if filter_choice:
-    filtered_df = df[df[column_choice].isin(filter_choice)]
-else:
-    filtered_df = df
+# --------------------------------------------------
+# Apply Filter
+# --------------------------------------------------
+plot_df = df.copy()
 
-# -----------------------------
-# COMBINED Q2 BUTTON
-# -----------------------------
-if dataset_choice == "RISCC Priorities":
-    if st.button("Show Combined Q2 Chart (RISCC)"):
-        plot_combined_q2(riscc_df)
+if filter_col != "None" and filter_vals:
+    plot_df = plot_df[plot_df[filter_col].astype(str).isin(filter_vals)]
 
+# --------------------------------------------------
+# Generate Chart (ALWAYS updates correctly)
+# --------------------------------------------------
+if st.button("Generate Chart"):
+
+    values = (
+        plot_df[question]
+        .dropna()
+        .astype(str)
+        .str.split(",")
+        .explode()
+        .str.strip()
+        .value_counts()
+    )
+
+    if values.empty:
+        st.warning("No data available for this selection.")
+    else:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        values.plot(kind="bar", ax=ax)
+        ax.set_title(question)
+        ax.set_ylabel("Number of Responses")
+        ax.set_xlabel("")
+        plt.xticks(rotation=45, ha="right")
+        plt.tight_layout()
+
+        st.pyplot(fig)
+
+        # Download image
+        st.download_button(
+            "⬇️ Download Chart (PNG)",
+            data=fig_to_png(fig),
+            file_name="survey_chart.png",
+            mime="image/png"
+        )
+
+# --------------------------------------------------
+# Helper: convert matplotlib fig to PNG
+# --------------------------------------------------
+import io
+def fig_to_png(fig):
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    buf.seek(0)
+    return buf
+
+# --------------------------------------------------
+# SE RISCC ONLY — Combined Q2 (Explicit & Separate)
+# --------------------------------------------------
+st.divider()
+st.subheader("📌 Combined Q2 Chart (SE RISCC only)")
+
+if dataset_name == "SE RISCC Priorities":
+
+    if st.button("Show Combined Q2 Chart"):
+
+        taxa_cols = {
+            "Terrestrial Plants": "Terrestrial Plants",
+            "Terrestrial Invertebrates": "Terrestrial invertebrates",
+            "Terrestrial Vertebrates": "Terrestrial vertebrates",
+            "Freshwater Plants": "Freshwater plants",
+            "Freshwater Invertebrates": "Freshwater invertebrates",
+            "Freshwater Vertebrates": "Freshwater vertebrates",
+            "Marine Plants": "Marine plants",
+            "Marine Invertebrates": "Marine invertebrates",
+            "Marine Vertebrates": "Marine vertebrates",
+        }
+
+        bins = [0, 20, 40, 60, 80, 100]
+        labels = ["0–20%", "20–40%", "40–60%", "60–80%", "80–100%"]
+
+        summary = {}
+
+        for label, keyword in taxa_cols.items():
+            col = [c for c in riscc_df.columns if keyword in c]
+            if col:
+                vals = pd.to_numeric(riscc_df[col[0]], errors="coerce").dropna()
+                summary[label] = (
+                    pd.cut(vals, bins=bins, labels=labels, include_lowest=True)
+                    .value_counts()
+                    .reindex(labels, fill_value=0)
+                )
+
+        summary_df = pd.DataFrame(summary).T
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+        summary_df.plot(kind="bar", stacked=True, ax=ax)
+        ax.set_title("SE RISCC Priorities – Combined Q2 (% Effort)")
+        ax.set_ylabel("Number of Responses")
+        ax.set_xlabel("Taxa Group")
+        plt.xticks(rotation=45, ha="right")
+        plt.tight_layout()
+
+        st.pyplot(fig)
