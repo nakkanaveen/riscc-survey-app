@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import io
+
+st.set_page_config(page_title="SE RISCC Survey Dashboard", layout="wide")
 
 # --------------------------------------------------
 # Load Data
@@ -13,56 +16,62 @@ def load_data():
 
 ext_df, riscc_df = load_data()
 
+# --------------------------------------------------
+# App Title
+# --------------------------------------------------
 st.title("📊 SE RISCC Survey Dashboard")
 
 # --------------------------------------------------
 # Dataset Selection
 # --------------------------------------------------
-dataset_name = st.selectbox(
-    "Choose the survey dataset:",
+dataset = st.selectbox(
+    "Choose survey dataset:",
     ["Extension Priorities", "SE RISCC Priorities"]
 )
 
-df = ext_df if dataset_name == "Extension Priorities" else riscc_df
+df = ext_df if dataset == "Extension Priorities" else riscc_df
 
-st.markdown(f"**Rows:** {df.shape[0]} &nbsp;&nbsp; **Columns:** {df.shape[1]}")
+st.markdown(f"**Responses:** {df.shape[0]} &nbsp;&nbsp; **Questions:** {df.shape[1]}")
 
 # --------------------------------------------------
 # Question Selection (THIS controls the chart)
 # --------------------------------------------------
 question = st.selectbox(
-    "Select a survey question to visualize:",
+    "Select a question to visualize:",
     df.columns
 )
 
 # --------------------------------------------------
-# Optional Filter (ONLY one, simple & clear)
+# Optional Filter (clear + simple)
 # --------------------------------------------------
-with st.expander("Optional filter (optional)"):
-    filter_col = st.selectbox("Filter column:", ["None"] + list(df.columns))
-    
-    if filter_col != "None":
-        filter_vals = st.multiselect(
+with st.expander("Optional filter"):
+    filter_column = st.selectbox(
+        "Filter by (optional):",
+        ["None"] + list(df.columns)
+    )
+
+    if filter_column != "None":
+        filter_values = st.multiselect(
             "Select values:",
-            sorted(df[filter_col].dropna().astype(str).unique())
+            sorted(df[filter_column].dropna().astype(str).unique())
         )
     else:
-        filter_vals = []
+        filter_values = []
 
 # --------------------------------------------------
 # Apply Filter
 # --------------------------------------------------
 plot_df = df.copy()
 
-if filter_col != "None" and filter_vals:
-    plot_df = plot_df[plot_df[filter_col].astype(str).isin(filter_vals)]
+if filter_column != "None" and filter_values:
+    plot_df = plot_df[plot_df[filter_column].astype(str).isin(filter_values)]
 
 # --------------------------------------------------
-# Generate Chart (ALWAYS updates correctly)
+# Generate Chart (ALWAYS reflects selected question)
 # --------------------------------------------------
 if st.button("Generate Chart"):
 
-    values = (
+    counts = (
         plot_df[question]
         .dropna()
         .astype(str)
@@ -72,11 +81,12 @@ if st.button("Generate Chart"):
         .value_counts()
     )
 
-    if values.empty:
+    if counts.empty:
         st.warning("No data available for this selection.")
     else:
         fig, ax = plt.subplots(figsize=(10, 5))
-        values.plot(kind="bar", ax=ax)
+        counts.plot(kind="bar", ax=ax)
+
         ax.set_title(question)
         ax.set_ylabel("Number of Responses")
         ax.set_xlabel("")
@@ -85,35 +95,29 @@ if st.button("Generate Chart"):
 
         st.pyplot(fig)
 
-        # Download image
+        # Download chart
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight", dpi=300)
+        buf.seek(0)
+
         st.download_button(
             "⬇️ Download Chart (PNG)",
-            data=fig_to_png(fig),
+            data=buf,
             file_name="survey_chart.png",
             mime="image/png"
         )
 
 # --------------------------------------------------
-# Helper: convert matplotlib fig to PNG
-# --------------------------------------------------
-import io
-def fig_to_png(fig):
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight")
-    buf.seek(0)
-    return buf
-
-# --------------------------------------------------
-# SE RISCC ONLY — Combined Q2 (Explicit & Separate)
+# Combined Q2 Chart (SE RISCC ONLY – Explicit)
 # --------------------------------------------------
 st.divider()
 st.subheader("📌 Combined Q2 Chart (SE RISCC only)")
 
-if dataset_name == "SE RISCC Priorities":
+if dataset == "SE RISCC Priorities":
 
     if st.button("Show Combined Q2 Chart"):
 
-        taxa_cols = {
+        taxa_keywords = {
             "Terrestrial Plants": "Terrestrial Plants",
             "Terrestrial Invertebrates": "Terrestrial invertebrates",
             "Terrestrial Vertebrates": "Terrestrial vertebrates",
@@ -130,12 +134,12 @@ if dataset_name == "SE RISCC Priorities":
 
         summary = {}
 
-        for label, keyword in taxa_cols.items():
-            col = [c for c in riscc_df.columns if keyword in c]
+        for taxa, keyword in taxa_keywords.items():
+            col = [c for c in df.columns if keyword in c]
             if col:
-                vals = pd.to_numeric(riscc_df[col[0]], errors="coerce").dropna()
-                summary[label] = (
-                    pd.cut(vals, bins=bins, labels=labels, include_lowest=True)
+                values = pd.to_numeric(df[col[0]], errors="coerce").dropna()
+                summary[taxa] = (
+                    pd.cut(values, bins=bins, labels=labels, include_lowest=True)
                     .value_counts()
                     .reindex(labels, fill_value=0)
                 )
@@ -144,6 +148,7 @@ if dataset_name == "SE RISCC Priorities":
 
         fig, ax = plt.subplots(figsize=(12, 6))
         summary_df.plot(kind="bar", stacked=True, ax=ax)
+
         ax.set_title("SE RISCC Priorities – Combined Q2 (% Effort)")
         ax.set_ylabel("Number of Responses")
         ax.set_xlabel("Taxa Group")
