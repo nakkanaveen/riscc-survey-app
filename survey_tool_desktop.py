@@ -55,7 +55,7 @@ dataset_choice = st.selectbox(
 )
 
 df = ext_df if dataset_choice == "Extension Priorities" else riscc_df
-st.caption(f"Responses: {df.shape[0]} | Questions available: {df.shape[1]}")
+#st.caption(f"Responses: {df.shape[0]} | Questions available: {df.shape[1]}")
 
 # --------------------------------------------------
 # Question selection (single dropdown)
@@ -150,25 +150,26 @@ if st.button("Generate Chart"):
             plt.tight_layout()
             st.pyplot(fig)
 
-# --------------------------------------------------
+# ==================================================
 # Combined Q2 Chart (SE RISCC only)
-# --------------------------------------------------
-st.divider()
-st.subheader("Combined Q2 Chart (Grouped by % Effort)")
+# ==================================================
+st.markdown("---")
+st.subheader("📌 Combined Q2 Chart (Grouped by % Effort)")
 
 if dataset_choice == "SE RISCC Priorities":
+
     if st.button("Show Combined Q2 Chart"):
 
-        taxa_keywords = {
-            "Terrestrial Plants": "Terrestrial Plants",
-            "Terrestrial Invertebrates": "Terrestrial invertebrates",
-            "Terrestrial Vertebrates": "Terrestrial vertebrates",
-            "Freshwater Plants": "Freshwater plants",
-            "Freshwater Invertebrates": "Freshwater invertebrates",
-            "Freshwater Vertebrates": "Freshwater vertebrates",
-            "Marine Plants": "Marine plants",
-            "Marine Invertebrates": "Marine invertebrates",
-            "Marine Vertebrates": "Marine vertebrates",
+        taxa_questions = {
+            "Terrestrial Plants": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Terrestrial Plants",
+            "Terrestrial Invertebrates": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Terrestrial invertebrates",
+            "Terrestrial Vertebrates": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Terrestrial vertebrates",
+            "Freshwater Plants": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Freshwater plants",
+            "Freshwater Invertebrates": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Freshwater invertebrates",
+            "Freshwater Vertebrates": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Freshwater vertebrates",
+            "Marine Plants": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Marine plants",
+            "Marine Invertebrates": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Marine invertebrates",
+            "Marine Vertebrates": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Marine vertebrates",
         }
 
         bins = [0, 20, 40, 60, 80, 100]
@@ -176,33 +177,46 @@ if dataset_choice == "SE RISCC Priorities":
 
         summary = {}
 
-        for taxa, keyword in taxa_keywords.items():
-            col = [c for c in df.columns if keyword in c]
-            if col:
-                values = pd.to_numeric(df[col[0]], errors="coerce").dropna()
-                summary[taxa] = (
-                    pd.cut(values, bins=bins, labels=labels, include_lowest=True)
-                    .value_counts()
-                    .reindex(labels, fill_value=0)
-                )
+        for taxa, col in taxa_questions.items():
+            if col in riscc_df.columns:
+                values = pd.to_numeric(riscc_df[col], errors="coerce").dropna()
+                binned = pd.cut(values, bins=bins, labels=labels, include_lowest=True)
+                summary[taxa] = binned.value_counts().reindex(labels, fill_value=0)
 
         summary_df = pd.DataFrame(summary).T
 
         if summary_df.empty:
-            st.warning("No Q2 data available.")
+            st.warning("No Q2 data found.")
         else:
+            percent_df = summary_df.div(summary_df.sum(axis=1), axis=0) * 100
+
             fig, ax = plt.subplots(figsize=(12, 6))
             summary_df.plot(kind="bar", stacked=True, ax=ax)
 
-            ax.set_title("SE RISCC Priorities – Combined Q2 (% Effort)")
+            ax.set_title("SE RISCC Priorities – Combined Q2 (Grouped by % Effort)")
             ax.set_xlabel("Taxa Group")
             ax.set_ylabel("Number of Responses")
-            ax.legend(
-                title="Effort Range (%)",
-                bbox_to_anchor=(1.02, 1),
-                loc="upper left"
-            )
+            ax.legend(title="Effort Range (%)", bbox_to_anchor=(1.02, 1), loc="upper left")
 
-            plt.xticks(rotation=45, ha="right")
+            for i, taxa in enumerate(summary_df.index):
+                y_offset = 0
+                for j, val in enumerate(summary_df.loc[taxa]):
+                    if val > 0:
+                        pct = percent_df.loc[taxa, summary_df.columns[j]]
+                        ax.text(
+                            i,
+                            y_offset + val / 2,
+                            f"{pct:.1f}%",
+                            ha="center",
+                            va="center",
+                            fontsize=8,
+                            color="white",
+                            weight="bold"
+                        )
+                        y_offset += val
+
             plt.tight_layout()
             st.pyplot(fig)
+
+else:
+    st.info("Combined Q2 chart is available only for the SE RISCC dataset.")
