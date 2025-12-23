@@ -31,7 +31,7 @@ dataset = st.selectbox(
 
 df = ext_df if dataset == "Extension Priorities" else riscc_df
 
-st.markdown(f"**Responses:** {df.shape[0]} &nbsp;&nbsp; **Questions:** {df.shape[1]}")
+#st.markdown(f"**Responses:** {df.shape[0]} &nbsp;&nbsp; **Questions:** {df.shape[1]}")
 
 # --------------------------------------------------
 # Question Selection (THIS controls the chart)
