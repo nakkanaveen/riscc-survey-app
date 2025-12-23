@@ -35,8 +35,8 @@ FIELDS_TO_REMOVE = [
     "IP Address",
 ]
 
-def remove_fields(df):
-    return df.drop(columns=[c for c in FIELDS_TO_REMOVE if c in df.columns], errors="ignore")
+#def remove_fields(df):
+   # return df.drop(columns=[c for c in FIELDS_TO_REMOVE if c in df.columns], errors="ignore")
 
 ext_df = remove_fields(ext_df)
 riscc_df = remove_fields(riscc_df)
@@ -154,7 +154,7 @@ if st.button("Generate Chart"):
 # Combined Q2 Chart (SE RISCC only)
 # --------------------------------------------------
 st.divider()
-st.subheader("📌 Combined Q2 Chart (Grouped by % Effort)")
+st.subheader("Combined Q2 Chart (Grouped by % Effort)")
 
 if dataset_choice == "SE RISCC Priorities":
     if st.button("Show Combined Q2 Chart"):
