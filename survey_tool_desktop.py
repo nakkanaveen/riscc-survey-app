@@ -35,8 +35,8 @@ FIELDS_TO_REMOVE = [
     "IP Address",
 ]
 
-#def remove_fields(df):
-   # return df.drop(columns=[c for c in FIELDS_TO_REMOVE if c in df.columns], errors="ignore")
+def remove_fields(df):
+    return df.drop(columns=[c for c in FIELDS_TO_REMOVE if c in df.columns], errors="ignore")
 
 ext_df = remove_fields(ext_df)
 riscc_df = remove_fields(riscc_df)
