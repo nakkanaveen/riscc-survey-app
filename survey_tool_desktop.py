@@ -42,6 +42,25 @@ ext_df = remove_fields(ext_df)
 riscc_df = remove_fields(riscc_df)
 
 # --------------------------------------------------
+# Session state initialization
+# --------------------------------------------------
+if "question" not in st.session_state:
+    st.session_state.question = None
+if "filter_column" not in st.session_state:
+    st.session_state.filter_column = "None"
+if "filter_values" not in st.session_state:
+    st.session_state.filter_values = []
+
+# --------------------------------------------------
+# Reset function (used by both buttons)
+# --------------------------------------------------
+def reset_all():
+    st.session_state.question = None
+    st.session_state.filter_column = "None"
+    st.session_state.filter_values = []
+    st.rerun()
+
+# --------------------------------------------------
 # Title
 # --------------------------------------------------
 st.title("📊 SE RISCC Survey Dashboard")
@@ -55,14 +74,14 @@ dataset_choice = st.selectbox(
 )
 
 df = ext_df if dataset_choice == "Extension Priorities" else riscc_df
-#st.caption(f"Responses: {df.shape[0]} | Questions available: {df.shape[1]}")
 
 # --------------------------------------------------
-# Question selection (single dropdown)
+# Question selection
 # --------------------------------------------------
 question = st.selectbox(
     "Select a question to visualize:",
-    df.columns
+    df.columns,
+    key="question"
 )
 
 # --------------------------------------------------
@@ -89,13 +108,23 @@ with st.expander("Optional filter"):
     else:
         filter_values = []
 
-    if st.button("🔄 Reset filters"):
-        st.rerun()
+    st.button("🔄 Reset filters", on_click=reset_all)
+
+# --------------------------------------------------
+# Action buttons (side-by-side)
+# --------------------------------------------------
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    generate = st.button("Generate Chart")
+
+with col2:
+    st.button("🔄 Reset all selections", on_click=reset_all)
 
 # --------------------------------------------------
 # Generate chart
 # --------------------------------------------------
-if st.button("Generate Chart"):
+if generate:
     plot_df = df.copy()
 
     if filter_column != "None" and filter_values:
@@ -120,7 +149,7 @@ if st.button("Generate Chart"):
         else:
             fig, ax = plt.subplots(figsize=(10, 5))
 
-            # Auto stacked bar if filtered
+            # Automatically switch to stacked bar if filtered
             if filter_column != "None" and filter_values:
                 stacked_df = (
                     plot_df
@@ -154,7 +183,7 @@ if st.button("Generate Chart"):
 # Combined Q2 Chart (SE RISCC only)
 # ==================================================
 st.markdown("---")
-st.subheader(" Combined Q2 Chart (Grouped by % Effort)")
+st.subheader("Combined Q2 Chart (Grouped by % Effort)")
 
 if dataset_choice == "SE RISCC Priorities":
 
