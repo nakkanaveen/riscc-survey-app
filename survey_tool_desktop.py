@@ -31,10 +31,10 @@ dataset = st.selectbox(
 
 df = ext_df if dataset == "Extension Priorities" else riscc_df
 
-#st.markdown(f"**Responses:** {df.shape[0]} &nbsp;&nbsp; **Questions:** {df.shape[1]}")
+st.caption(f"Responses: {df.shape[0]} | Questions: {df.shape[1]}")
 
 # --------------------------------------------------
-# Question Selection (THIS controls the chart)
+# Question Selection (Chart Driver)
 # --------------------------------------------------
 question = st.selectbox(
     "Select a question to visualize:",
@@ -42,81 +42,122 @@ question = st.selectbox(
 )
 
 # --------------------------------------------------
-# Optional Filter (clear + simple)
+# Optional Filter Section
 # --------------------------------------------------
-with st.expander("Optional filter"):
-    filter_column = st.selectbox(
-        "Filter by (optional):",
-        ["None"] + list(df.columns)
+st.markdown("### Optional filter")
+st.caption(
+    "Use this only if you want to limit the chart to a specific group of respondents "
+    "(for example: viewing gender *within* a specific race or affiliation)."
+)
+
+filter_columns = [c for c in df.columns if c != question]
+
+filter_column = st.selectbox(
+    "Filter respondents by (optional):",
+    ["None"] + filter_columns
+)
+
+filter_values = []
+
+if filter_column != "None":
+    filter_values = st.multiselect(
+        "Select values:",
+        sorted(df[filter_column].dropna().astype(str).unique())
     )
 
-    if filter_column != "None":
-        filter_values = st.multiselect(
-            "Select values:",
-            sorted(df[filter_column].dropna().astype(str).unique())
-        )
-    else:
-        filter_values = []
+# --------------------------------------------------
+# Reset Filters Button
+# --------------------------------------------------
+if st.button("🔄 Reset filters"):
+    st.experimental_rerun()
 
 # --------------------------------------------------
 # Apply Filter
 # --------------------------------------------------
 plot_df = df.copy()
 
+filter_applied = False
+
 if filter_column != "None" and filter_values:
     plot_df = plot_df[plot_df[filter_column].astype(str).isin(filter_values)]
+    filter_applied = True
 
 # --------------------------------------------------
-# Generate Chart (ALWAYS reflects selected question)
+# Generate Chart
 # --------------------------------------------------
 if st.button("Generate Chart"):
 
-    counts = (
-        plot_df[question]
-        .dropna()
-        .astype(str)
-        .str.split(",")
-        .explode()
-        .str.strip()
-        .value_counts()
-    )
-
-    if counts.empty:
-        st.warning("No data available for this selection.")
+    if plot_df.empty:
+        st.warning("No responses match the selected filters.")
     else:
-        fig, ax = plt.subplots(figsize=(10, 5))
-        counts.plot(kind="bar", ax=ax)
-
-        ax.set_title(question)
-        ax.set_ylabel("Number of Responses")
-        ax.set_xlabel("")
-        plt.xticks(rotation=45, ha="right")
-        plt.tight_layout()
-
-        st.pyplot(fig)
-
-        # Download chart
-        buf = io.BytesIO()
-        fig.savefig(buf, format="png", bbox_inches="tight", dpi=300)
-        buf.seek(0)
-
-        st.download_button(
-            "⬇️ Download Chart (PNG)",
-            data=buf,
-            file_name="survey_chart.png",
-            mime="image/png"
+        counts = (
+            plot_df[question]
+            .dropna()
+            .astype(str)
+            .str.split(",")
+            .explode()
+            .str.strip()
         )
 
+        if counts.empty:
+            st.warning("No data available for this question.")
+        else:
+            fig, ax = plt.subplots(figsize=(10, 5))
+
+            if filter_applied:
+                # Stacked bar when filtered
+                stacked = (
+                    plot_df[[question, filter_column]]
+                    .dropna()
+                    .assign(
+                        **{
+                            question: lambda x: x[question].astype(str).str.split(",")
+                        }
+                    )
+                    .explode(question)
+                    .groupby([question, filter_column])
+                    .size()
+                    .unstack(fill_value=0)
+                )
+
+                stacked.plot(kind="bar", stacked=True, ax=ax)
+                ax.legend(title=filter_column, bbox_to_anchor=(1.05, 1), loc="upper left")
+
+                st.caption(
+                    f"Showing **{question}** for respondents filtered by **{filter_column}**."
+                )
+
+            else:
+                counts.value_counts().plot(kind="bar", ax=ax)
+
+            ax.set_title(question)
+            ax.set_ylabel("Number of Responses")
+            ax.set_xlabel("")
+            plt.xticks(rotation=45, ha="right")
+            plt.tight_layout()
+
+            st.pyplot(fig)
+
+            # Download button
+            buf = io.BytesIO()
+            fig.savefig(buf, format="png", bbox_inches="tight", dpi=300)
+            buf.seek(0)
+
+            st.download_button(
+                "⬇️ Download chart (PNG)",
+                data=buf,
+                file_name="survey_chart.png",
+                mime="image/png"
+            )
+
 # --------------------------------------------------
-# Combined Q2 Chart (SE RISCC ONLY – Explicit)
+# Combined Q2 Chart (SE RISCC only)
 # --------------------------------------------------
 st.divider()
 st.subheader("📌 Combined Q2 Chart (SE RISCC only)")
 
 if dataset == "SE RISCC Priorities":
-
     if st.button("Show Combined Q2 Chart"):
-
         taxa_keywords = {
             "Terrestrial Plants": "Terrestrial Plants",
             "Terrestrial Invertebrates": "Terrestrial invertebrates",
