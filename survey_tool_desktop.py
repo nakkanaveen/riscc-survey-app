@@ -22,6 +22,26 @@ def load_data():
 ext_df, riscc_df = load_data()
 
 # --------------------------------------------------
+# Remove ONLY requested fields
+# --------------------------------------------------
+FIELDS_TO_REMOVE = [
+    "Please indicate you race/ethnicity (Optional)",
+    "If you chose self-describe, please elaborate.",
+    "Gender: How do you identify? (Optional)",
+    "Identify your highest level of education (Optional)",
+    "Before we get started, please include your email if you would like to be added to the SE RISCC list serve (Optional)",
+    "Do you voluntarily consent to participate in this study?",
+    "Q_RecaptchaScore",
+    "IP Address",
+]
+
+def remove_fields(df):
+    return df.drop(columns=[c for c in FIELDS_TO_REMOVE if c in df.columns], errors="ignore")
+
+ext_df = remove_fields(ext_df)
+riscc_df = remove_fields(riscc_df)
+
+# --------------------------------------------------
 # Title
 # --------------------------------------------------
 st.title("📊 SE RISCC Survey Dashboard")
@@ -35,11 +55,10 @@ dataset_choice = st.selectbox(
 )
 
 df = ext_df if dataset_choice == "Extension Priorities" else riscc_df
-
-#st.markdown(f"**Rows:** {df.shape[0]} &nbsp;&nbsp; **Columns:** {df.shape[1]}")
+st.caption(f"Responses: {df.shape[0]} | Questions available: {df.shape[1]}")
 
 # --------------------------------------------------
-# Question selection (ONLY ONE dropdown)
+# Question selection (single dropdown)
 # --------------------------------------------------
 question = st.selectbox(
     "Select a question to visualize:",
@@ -47,12 +66,12 @@ question = st.selectbox(
 )
 
 # --------------------------------------------------
-# Optional filter section
+# Optional filter
 # --------------------------------------------------
 with st.expander("Optional filter"):
     st.caption(
         "Use this only if you want to limit the chart to a specific group of respondents "
-        "(for example: viewing gender within a specific race or affiliation)."
+        "(for example, viewing responses within a specific affiliation or role)."
     )
 
     filter_column = st.selectbox(
@@ -79,7 +98,6 @@ with st.expander("Optional filter"):
 if st.button("Generate Chart"):
     plot_df = df.copy()
 
-    # Apply filter if selected
     if filter_column != "None" and filter_values:
         plot_df = plot_df[
             plot_df[filter_column].astype(str).isin(filter_values)
@@ -102,7 +120,7 @@ if st.button("Generate Chart"):
         else:
             fig, ax = plt.subplots(figsize=(10, 5))
 
-            # AUTO stacked bar if filtered
+            # Auto stacked bar if filtered
             if filter_column != "None" and filter_values:
                 stacked_df = (
                     plot_df
@@ -117,8 +135,11 @@ if st.button("Generate Chart"):
                 ax.set_xlabel(filter_column)
                 ax.set_ylabel("Number of Responses")
                 ax.set_title(f"{question} (Filtered)")
-                ax.legend(title="Response", bbox_to_anchor=(1.02, 1), loc="upper left")
-
+                ax.legend(
+                    title="Response",
+                    bbox_to_anchor=(1.02, 1),
+                    loc="upper left"
+                )
             else:
                 values.value_counts().plot(kind="bar", ax=ax)
                 ax.set_xlabel("Response")
@@ -129,26 +150,25 @@ if st.button("Generate Chart"):
             plt.tight_layout()
             st.pyplot(fig)
 
-# ==================================================
+# --------------------------------------------------
 # Combined Q2 Chart (SE RISCC only)
-# ==================================================
-st.markdown("---")
+# --------------------------------------------------
+st.divider()
 st.subheader("📌 Combined Q2 Chart (Grouped by % Effort)")
 
 if dataset_choice == "SE RISCC Priorities":
-
     if st.button("Show Combined Q2 Chart"):
 
-        taxa_questions = {
-            "Terrestrial Plants": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Terrestrial Plants",
-            "Terrestrial Invertebrates": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Terrestrial invertebrates",
-            "Terrestrial Vertebrates": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Terrestrial vertebrates",
-            "Freshwater Plants": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Freshwater plants",
-            "Freshwater Invertebrates": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Freshwater invertebrates",
-            "Freshwater Vertebrates": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Freshwater vertebrates",
-            "Marine Plants": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Marine plants",
-            "Marine Invertebrates": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Marine invertebrates",
-            "Marine Vertebrates": "2. Identify the percentage of your effort on the slider (sum to 100%) dedicated to managing each of the following invasive taxa and habitats. - Marine vertebrates",
+        taxa_keywords = {
+            "Terrestrial Plants": "Terrestrial Plants",
+            "Terrestrial Invertebrates": "Terrestrial invertebrates",
+            "Terrestrial Vertebrates": "Terrestrial vertebrates",
+            "Freshwater Plants": "Freshwater plants",
+            "Freshwater Invertebrates": "Freshwater invertebrates",
+            "Freshwater Vertebrates": "Freshwater vertebrates",
+            "Marine Plants": "Marine plants",
+            "Marine Invertebrates": "Marine invertebrates",
+            "Marine Vertebrates": "Marine vertebrates",
         }
 
         bins = [0, 20, 40, 60, 80, 100]
@@ -156,46 +176,33 @@ if dataset_choice == "SE RISCC Priorities":
 
         summary = {}
 
-        for taxa, col in taxa_questions.items():
-            if col in riscc_df.columns:
-                values = pd.to_numeric(riscc_df[col], errors="coerce").dropna()
-                binned = pd.cut(values, bins=bins, labels=labels, include_lowest=True)
-                summary[taxa] = binned.value_counts().reindex(labels, fill_value=0)
+        for taxa, keyword in taxa_keywords.items():
+            col = [c for c in df.columns if keyword in c]
+            if col:
+                values = pd.to_numeric(df[col[0]], errors="coerce").dropna()
+                summary[taxa] = (
+                    pd.cut(values, bins=bins, labels=labels, include_lowest=True)
+                    .value_counts()
+                    .reindex(labels, fill_value=0)
+                )
 
         summary_df = pd.DataFrame(summary).T
 
         if summary_df.empty:
-            st.warning("No Q2 data found.")
+            st.warning("No Q2 data available.")
         else:
-            percent_df = summary_df.div(summary_df.sum(axis=1), axis=0) * 100
-
             fig, ax = plt.subplots(figsize=(12, 6))
             summary_df.plot(kind="bar", stacked=True, ax=ax)
 
-            ax.set_title("SE RISCC Priorities – Combined Q2 (Grouped by % Effort)")
+            ax.set_title("SE RISCC Priorities – Combined Q2 (% Effort)")
             ax.set_xlabel("Taxa Group")
             ax.set_ylabel("Number of Responses")
-            ax.legend(title="Effort Range (%)", bbox_to_anchor=(1.02, 1), loc="upper left")
+            ax.legend(
+                title="Effort Range (%)",
+                bbox_to_anchor=(1.02, 1),
+                loc="upper left"
+            )
 
-            for i, taxa in enumerate(summary_df.index):
-                y_offset = 0
-                for j, val in enumerate(summary_df.loc[taxa]):
-                    if val > 0:
-                        pct = percent_df.loc[taxa, summary_df.columns[j]]
-                        ax.text(
-                            i,
-                            y_offset + val / 2,
-                            f"{pct:.1f}%",
-                            ha="center",
-                            va="center",
-                            fontsize=8,
-                            color="white",
-                            weight="bold"
-                        )
-                        y_offset += val
-
+            plt.xticks(rotation=45, ha="right")
             plt.tight_layout()
             st.pyplot(fig)
-
-else:
-    st.info("Combined Q2 chart is available only for the SE RISCC dataset.")
