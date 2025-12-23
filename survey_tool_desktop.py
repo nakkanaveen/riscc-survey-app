@@ -154,7 +154,7 @@ if st.button("Generate Chart"):
 # Combined Q2 Chart (SE RISCC only)
 # ==================================================
 st.markdown("---")
-st.subheader("📌 Combined Q2 Chart (Grouped by % Effort)")
+st.subheader(" Combined Q2 Chart (Grouped by % Effort)")
 
 if dataset_choice == "SE RISCC Priorities":
 
